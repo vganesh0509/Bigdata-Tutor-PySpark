@@ -1,0 +1,25 @@
+.custom-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10; /* Ensure it's on top of other content */
+  padding: 20px 10px;
+}
+
+.white-text {
+  color: white !important;
+}
+
+.signup-btn {
+  margin-left: 20px;
+}
+
+.signup-btn a {
+  color: white; /* Set text color to white */
+  text-decoration: none; /* Remove underline */
+}
+
+.signup-btn a:hover {
+  text-decoration: none; /* Ensure no underline on hover */
+}

@@ -1,0 +1,18 @@
+.login-page {
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  .login-image {
+    width: 100%;
+    height: 100vh;
+    object-fit: cover; /* Ensures full image coverage without distortion */
+    display: block;
+  }
+  
+
+  .login-image-div{
+    justify-content: center;
+    align-items: center;
+    align-self: center;
+  }
