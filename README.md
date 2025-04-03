@@ -10,7 +10,7 @@ Empowering students to generate **PySpark code** using simple **English text** �
 > Welcomes users with a modern landing UI.  
 “Try it now” acts as the login button, and new users can sign up easily.
 
-![Home](screenshots/homepage.png)
+![Home](frontend/public/bgimg.jpg)
 
 ### 🔐 Login Page
 > Users enter credentials to access the editor.  
