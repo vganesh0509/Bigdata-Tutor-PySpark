@@ -69,7 +69,7 @@ def login():
         print( user )
         userid = str(user["_id"])
         print( userid )
-        return jsonify({"token": token.decode('UTF-8'), "role": user["role"], "userid": userid}), 200
+        return jsonify({"token": token, "role": user["role"], "userid": userid}), 200
 
     return jsonify({"message": "❌ Invalid credentials!"}), 401
 
