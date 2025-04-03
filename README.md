@@ -10,18 +10,18 @@ Empowering students to generate **PySpark code** using simple **English text** �
 > Welcomes users with a modern landing UI.  
 “Try it now” acts as the login button, and new users can sign up easily.
 
-![Home](frontend/public/bgimg.jpg)
+![Home](ScreenShot/homepage.jpg)
 
 ### 🔐 Login Page
 > Users enter credentials to access the editor.  
 Option to register is also available.
 
-![Login](screenshots/login.png)
+![Login](ScreenShot/login.jpg)
 
 ### 🧠 Workflow UI
 > Students create step-by-step big data workflows with the help of a chatbot.
 
-![UI](screenshots/editor.png)
+![UI](ScreenShot/workflow.jpg)
 
 ---
 
