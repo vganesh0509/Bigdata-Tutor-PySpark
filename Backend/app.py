@@ -12,11 +12,18 @@ from pyspark.sql import SparkSession
 from io import StringIO
 import contextlib
 import tempfile
+import sys
+from werkzeug.utils import secure_filename
+import glob
 
 app = Flask(__name__)
 CORS(app)
 bcrypt = Bcrypt(app)
 app.config["SECRET_KEY"] = "63992f13e7ed15b32438c95f88796b57ddbba7ad997938905a73467b6f77ebb4"
+
+spark_jar_dir = r"E:\spark-3.5.5\spark-3.5.5-bin-hadoop3\jars"  # 👈 Update this path if needed
+# Get all JARs
+jars = glob.glob(os.path.join(spark_jar_dir, "*.jar"))
 
 # Correct JAVA_HOME (no trailing bin)
 java_home = r"C:\Program Files (x86)\Java\jdk-1.8"
@@ -168,42 +175,92 @@ def run_workflow():
         "pyspark_code": pyspark_code
     }), 201
 
+def provide_code(nodes,edges):
+    if not nodes or not edges:
+        return jsonify({"error": "❌ Invalid workflow data. Nodes or Edges missing."}), 400
+
+    print(f"✅ Running workflow for user with {len(nodes)} nodes and {len(edges)} edges.")
+
+    # ✅ Generate PySpark Code from Workflow
+    pyspark_code = generate_pyspark_code(nodes, edges)
+    print("Generated PySpark Code:\n", pyspark_code)
+
+    # ✅ Save workflow execution data to MongoDB
+    workflow_entry = {
+        "nodes": nodes,
+        "edges": edges,
+        "pyspark_code": pyspark_code,
+        "status": "executed"
+    }
+    # workflows_collection.insert_one(workflow_entry)
+
+    return jsonify({
+        "message": "✅ Workflow executed successfully!",
+        "pyspark_code": pyspark_code
+    }), 201
 
 # Chatbot route
 @app.route("/api/chatbot", methods=["POST"])
 def chatbot():
-    user_message = request.json.get("message")
+    data = request.json
+    message = data.get("message")
+    level = data.get("level", "beginner")  # default to beginner
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
 
-    # System instruction for student-oriented guidance
+    if not message:
+        return jsonify({"reply": "❌ No message provided."}), 400
+
+    # Add workflow context if present
+    workflow_context = ""
+    if nodes and edges:
+        code_snippet = provide_code(nodes, edges)
+        if level == "beginner":
+            workflow_context = (
+                "\n\nThis is the student's workflow. Explain it step-by-step:\n"
+                f"{code_snippet}"
+            )
+        else:
+            workflow_context = (
+                "\n\nGenerate clean PySpark code for the following workflow:\n"
+                f"{code_snippet}"
+            )
+
+    # System prompt based on level
     system_prompt = (
-        "You are an expert AI assistant for BigDataTutor, a tool to help data engineering students. "
-        "Your role is to guide students in: breaking down data engineering problems, designing Spark workflows, "
-        "writing node scripts in PySpark, testing/debugging their steps, and maintaining data/control flow. "
-        "Respond in a helpful, simple, and educational manner."
+        "You are an AI assistant for BigDataTutor. Your job is to help students understand data engineering, "
+        "Spark workflows, and PySpark code.\n"
     )
+    if level == "beginner":
+        system_prompt += (
+            "Explain everything simply, break it down step-by-step, and use analogies if needed. "
+            "Assume the user is just starting out.\n"
+        )
+    else:
+        system_prompt += (
+            "Assume the user is advanced. Be concise and output only working PySpark code unless asked for more.\n"
+        )
 
-    # Build chat payload
+    # Final payload
     payload = {
         "model": MODEL_ID,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": message + workflow_context}
         ],
-        "max_tokens": 500,
+        "max_tokens": 800,
         "temperature": 0.7,
-        "top_p": 0.9
+        "top_p": 0.95
     }
 
     try:
         response = requests.post(BASE_URL, json=payload)
         response.raise_for_status()
-
         data = response.json()
-        bot_reply = data["choices"][0]["message"]["content"]
-        return jsonify({"reply": bot_reply})
-
+        reply = data["choices"][0]["message"]["content"]
+        return jsonify({"reply": reply})
     except Exception as e:
-        return jsonify({"reply": f"❌ Error contacting model: {str(e)}"}), 500
+        return jsonify({"reply": f"❌ Error: {str(e)}"}), 500
 
 
 
@@ -219,7 +276,7 @@ def get_workflows():
         # Convert ObjectId to string for each workflow
         for workflow in workflows:
             workflow["_id"] = str(workflow["_id"])  # Convert _id to string
-        print("✅ Workflows Found:", workflows)
+        # print("✅ Workflows Found:", workflows)
 
         return jsonify(workflows), 200
     except Exception as e:
@@ -297,28 +354,118 @@ spark = SparkSession.builder.appName("WorkflowExecution").getOrCreate()
 @app.route("/api/run_pyspark", methods=["POST"])
 def run_pyspark():
     try:
+        # Set Java path (Update if needed)
+        os.environ["JAVA_HOME"] = r"C:\Program Files\Java\jdk1.8.0_202"
+        os.environ["PATH"] = os.environ["JAVA_HOME"] + r"\bin;" + os.environ["PATH"]
+
+        # Get inputs
         code = request.form.get("code")
         manual_input = request.form.get("manualInput", "")
+        language = request.form.get("language", "python").lower()
+        uploaded_files = request.files.getlist("files")
 
         if not code:
-            return jsonify({"error": "❌ No PySpark code provided!"}), 400
+            return jsonify({"error": "❌ No code provided!"}), 400
 
-        # Optional input
-        if manual_input:
-            code = f"manual_input = '''{manual_input}'''\n\n" + code
+        # Setup upload folder
+        upload_folder = "./uploads"
+        os.makedirs(upload_folder, exist_ok=True)
 
-        # Setup output buffer
+        file_paths = []
+        for file in uploaded_files:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(upload_folder, filename)
+            file.save(filepath)
+            file_paths.append(filepath)
+
+        # Setup output buffers
         output_buffer = StringIO()
         error_buffer = StringIO()
+        runtime_config = {}
+        if language == "python":
+            if manual_input:
+                code = f"manual_input = '''{manual_input}'''\n\n" + code
 
-        # Create a SparkSession
-        spark = SparkSession.builder.master("local[*]").appName("BigDataApp").getOrCreate()
-        local_env = {"spark": spark}
+            stdin_backup = sys.stdin
+            sys.stdin = StringIO(manual_input)
 
-        with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
-            exec(code, local_env)
+            # Create SparkSession
+            spark = SparkSession.builder.master("local[*]").appName("BigDataApp").getOrCreate()
+            local_env = {"spark": spark, "uploaded_files": file_paths}
 
-        spark.stop()
+            with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
+                exec(code, local_env)
+
+            sys.stdin = stdin_backup
+            sc = spark.sparkContext
+            runtime_config = {
+                "cluster": sc.master,
+                "ip": sc.getConf().get("spark.driver.host", "n/a"),
+                "port": sc.getConf().get("spark.driver.port", "n/a"),
+                "user": os.getlogin(),  # or use getpass.getuser()
+                "applicationId": sc.applicationId,
+                "uiUrl": sc.uiWebUrl or "n/a"
+            }
+            spark.stop()
+
+        elif language == "java":
+            try:
+                print("📦 Java execution started")
+
+                # Save code to .java file
+                java_file = os.path.join(upload_folder, "TestApp.java")
+                with open(java_file, "w") as f:
+                    f.write(code)
+
+                # Prepare classpath (Spark JARs + upload folder)
+                spark_jar_dir = r"E:\spark-3.5.5\spark-3.5.5-bin-hadoop3\jars"  # 💡 Update this path if needed
+                jars = glob.glob(os.path.join(spark_jar_dir, "*.jar"))
+                classpath = os.pathsep.join(jars + [upload_folder])
+                manual_input = manual_input.replace("\r\n", "\n").strip() + "\n"
+
+                print("Manual input received:", repr(manual_input))
+
+                # Compile Java code
+                compile_proc = subprocess.run(
+                    ["javac", "-cp", classpath, java_file],
+                    input=manual_input,  
+                    capture_output=True, text=True
+                )
+
+                if compile_proc.returncode != 0:
+                    print(compile_proc.stderr)
+                    return jsonify({"error": compile_proc.stderr}), 400
+
+                # Run Java class
+                run_proc = subprocess.run(
+                    ["java", "-cp", classpath, "TestApp"],
+                    input=manual_input,
+                    capture_output=True, text=True
+                )
+                # After run_proc
+                stderr_filtered = "\n".join(
+                    line for line in run_proc.stderr.splitlines()
+                    if not line.strip().startswith("INFO") and not line.strip().startswith("Using Spark's")
+                )
+
+                output_buffer.write(run_proc.stdout)
+                error_buffer.write(stderr_filtered)
+
+            except Exception as e:
+                return jsonify({"error": f"Java runtime error: {str(e)}"}), 500
+
+            # Clean up
+            class_file = os.path.join(upload_folder, "TestApp.class")
+            if os.path.exists(class_file):
+                os.remove(class_file)
+            os.remove(java_file)
+
+        else:
+            return jsonify({"error": f"Unsupported language: {language}"}), 400
+
+        # Remove uploaded files
+        for path in file_paths:
+            os.remove(path)
 
         return jsonify({
             "output": output_buffer.getvalue(),
@@ -329,13 +476,14 @@ def run_pyspark():
                 "port": "n/a",
                 "user": "username guest",
                 "password": "n/a"
-            }
+            },
+            "another_config": runtime_config
         })
 
     except Exception as e:
+        print("INSIDE EXCEPTION")
+        print(e)
         return jsonify({"error": str(e)}), 500
-
-
 
 # ✅ Execute Spark Code in a Local Cluster
 @app.route("/api/execute_spark", methods=["POST"])

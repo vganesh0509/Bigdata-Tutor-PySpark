@@ -185,10 +185,83 @@ const WorkflowEditor = ({ userRole }) => {
     }
   };
 
+  const getOrderedAccumulatedStatements = (nodes, edges) => {
+    const nodeMap = Object.fromEntries(nodes.map((node) => [node.id, { ...node }]));
+  
+    // Map target → [source1, source2, ...]
+    const incomingMap = {};
+    const outgoingMap = {};
+  
+    edges.forEach(({ source, target }) => {
+      if (!incomingMap[target]) incomingMap[target] = [];
+      if (!outgoingMap[source]) outgoingMap[source] = [];
+      incomingMap[target].push(source);
+      outgoingMap[source].push(target);
+    });
+  
+    const visited = new Set();
+    const result = [];
+  
+    // Get topologically sorted nodes by depth (basic Kahn’s algorithm with LTR sort)
+    const getExecutionOrder = () => {
+      const inDegree = {};
+      nodes.forEach((node) => (inDegree[node.id] = 0));
+      edges.forEach(({ target }) => {
+        inDegree[target]++;
+      });
+  
+      const queue = nodes
+        .filter((node) => inDegree[node.id] === 0)
+        .sort((a, b) => a.position.x - b.position.x); // Start left to right
+  
+      const ordered = [];
+  
+      while (queue.length > 0) {
+        const node = queue.shift();
+        ordered.push(node);
+  
+        (outgoingMap[node.id] || []).forEach((childId) => {
+          inDegree[childId]--;
+          if (inDegree[childId] === 0) {
+            queue.push(nodeMap[childId]);
+            queue.sort((a, b) => a.position.x - b.position.x);
+          }
+        });
+      }
+  
+      return ordered;
+    };
+  
+    const orderedNodes = getExecutionOrder();
+  
+    // Build cumulative statements
+    for (const node of orderedNodes) {
+      const currentId = node.id;
+      const currentStatements = node.data.statements || [];
+  
+      // Merge all parent cumulative statements
+      const parentIds = incomingMap[currentId] || [];
+      const parentCumulative = parentIds.flatMap(
+        (parentId) => nodeMap[parentId].data.cumulativeStatements || []
+      );
+  
+      const cumulativeStatements = [...parentCumulative, ...currentStatements];
+      nodeMap[currentId].data.cumulativeStatements = cumulativeStatements;
+    }
+  
+    return Object.values(nodeMap);
+  };
+  
+  
+
   
   const handleRun = async () => {
     try{
-      const workflowData = { nodes, edges };
+      const enrichedNodes = getOrderedAccumulatedStatements(nodes, edges);
+
+      console.log( enrichedNodes )
+
+      const workflowData = { enrichedNodes, edges };
       console.log( workflowData );
       
       console.log( workflowData );
@@ -297,7 +370,7 @@ const WorkflowEditor = ({ userRole }) => {
           </div>
         </Modal>
   
-        <ChatBot />
+        <ChatBot nodes={nodes} edges={edges}/>
       </div>
     );
   

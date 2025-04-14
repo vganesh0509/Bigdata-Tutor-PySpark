@@ -1,0 +1,7 @@
+flask
+flask_cors
+flask_bcrypt
+pymongo
+jwt
+requests
+pyspark
