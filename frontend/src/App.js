@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Homepage from "./pages/Homepage/Homepage";
 import CodeEditorPanel from "./pages/CodeEditorPanel/CodeEditorPanel";
+import Instructor from "./pages/Instructor/Instructor";
 
 function App() {
   const [userRole, setUserRole] = useState(localStorage.getItem("role"));
@@ -24,14 +25,15 @@ function App() {
       <div style={{ textAlign: "center"}}>
 
         {/* Show Logout Button if User is Logged In */}
-        {userRole && (
-          <button onClick={handleLogout} style={{ marginBottom: "10px" }}>🚪 Logout</button>
-        )}
+        {/* {userRole && (
+          <button onClick={handleLogout} style={{ marginBottom: "10px", float: 'right' }}>🚪 Logout</button>
+        )} */}
 
         <Routes>
           {/* ✅ Redirect logged-in users to Workflow Editor, else Login */}
           <Route path="/" element={userRole ? <Navigate to="/workflow-editor" /> : <Navigate to="/home" />} />
-          <Route path="/login" element={<Login setUserRole={setUserRole} />} />
+          <Route path="/view-workflows" element={ <Instructor setUserRole={setUserRole} /> } />
+          <Route path="/login" element={<Login setUserRole={setUserRole} handleLogout={handleLogout} />} />
           <Route path="/register" element={<Register />} />
           <Route path="/home" element={<Homepage />} />
           <Route path="/code-editor" element={<CodeEditorPanel />} />

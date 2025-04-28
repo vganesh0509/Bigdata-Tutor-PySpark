@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from database.mongo_config import db  # MongoDB connection
-import jwt
+from jwt import JWT, jwk_from_dict
 import subprocess
 import datetime  # Execution logs
 import requests
@@ -15,6 +15,7 @@ import tempfile
 import sys
 from werkzeug.utils import secure_filename
 import glob
+import google.generativeai as genai
 
 app = Flask(__name__)
 CORS(app)
@@ -40,12 +41,15 @@ for path_dir in os.environ["PATH"].split(";"):
 # Prepend the correct Java bin path to the cleaned PATH
 os.environ["PATH"] = os.path.join(java_home, "bin") + ";" + ";".join(cleaned_path)
 
-BASE_URL = "http://cci-siscluster1.charlotte.edu:5002/v1/chat/completions"
-MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+# BASE_URL = "http://cci-siscluster1.charlotte.edu:5002/v1/chat/completions"
+# MODEL_ID = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+model = genai.GenerativeModel("gemini-pro")
+genai.configure(api_key="AIzaSyBeuS45QQeBiwSf2nbBHGtRS2CkkgUWNzA")
 
 # MongoDB Collections
 users_collection = db["users"]
 workflows_collection = db["workflows"]
+questions_collection = db["questions"]
 execution_logs_collection = db["execution_logs"]  # ✅ New collection for execution logs
 
 # ✅ User Registration API
@@ -69,12 +73,26 @@ def login():
     user = users_collection.find_one({"username": data["username"]})
 
     if user and bcrypt.check_password_hash(user["password"], data["password"]):
-        token = jwt.encode({
-			'identity': user["username"],
-			'role' : user["role"]
-		}, app.config['SECRET_KEY'])
-        print( user )
+        jwt_instance = JWT()
+
+         # Secret key for HMAC
+        key = jwk_from_dict({
+            "k": app.config['SECRET_KEY'],
+            "kty": "oct"
+        })
+
+        payload = {
+            "identity": user["username"],
+            "role": user["role"],
+            "exp": int((datetime.datetime.utcnow() + datetime.timedelta(hours=1)).timestamp())
+        }
+        # token = jwt.encode({
+		# 	'identity': user["username"],
+		# 	'role' : user["role"]
+		# }, app.config['SECRET_KEY'])
+        token = jwt_instance.encode(payload, key, alg='HS256')
         userid = str(user["_id"])
+
         print( userid )
         return jsonify({"token": token, "role": user["role"], "userid": userid}), 200
 
@@ -99,22 +117,14 @@ def save_workflow():
 
 # ✅ Query DeepSeek AI for PySpark Code
 def query_model(user_input):
-    headers = {"Content-Type": "application/json"}
-    data = {
-        "model": MODEL_ID,
-        "messages": [
-            {"role": "system", "content": "You are a helpful AI assistant that generates PySpark code."},
-            {"role": "user", "content": user_input}
-        ]
-    }
-
     try:
-        response = requests.post(BASE_URL, headers=headers, data=json.dumps(data))
-        response_json = response.json()
-        return response_json["choices"][0]["message"]["content"]
+        print("ENTER")
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
+        response = model.generate_content(user_input)
+        return response.text
+
     except Exception as e:
         return f"Error: {str(e)}"
-
 
 # ✅ Generate PySpark Code Based on Workflow Nodes
 def generate_pyspark_code(nodes, edges):
@@ -146,34 +156,24 @@ def generate_pyspark_code(nodes, edges):
 def run_workflow():
     data = request.json
     workflow = data.get("workflow", {})  # ✅ Extract the workflow dictionary
-    userid = data.get("userid", "unknown_user")  # ✅ Extract userid
-    
-    nodes = workflow.get("nodes", [])  # ✅ Extract nodes from the workflow
-    edges = workflow.get("edges", [])  # ✅ Extract edges from the workflow
+    enriched_nodes = workflow.get("enrichedNodes", [])
+    edges = workflow.get("edges", [])
 
-    if not nodes or not edges:
+    print( enriched_nodes )
+    print( edges )
+    if not enriched_nodes or not edges:
         return jsonify({"error": "❌ Invalid workflow data. Nodes or Edges missing."}), 400
 
-    print(f"✅ Running workflow for user {userid} with {len(nodes)} nodes and {len(edges)} edges.")
+    print(f"✅ Running workflow with {len(enriched_nodes)} nodes and {len(edges)} edges.")
 
-    # ✅ Generate PySpark Code from Workflow
-    pyspark_code = generate_pyspark_code(nodes, edges)
+    pyspark_code = generate_pyspark_code(enriched_nodes, edges)
     print("Generated PySpark Code:\n", pyspark_code)
-
-    # ✅ Save workflow execution data to MongoDB
-    workflow_entry = {
-        "userid": userid,
-        "nodes": nodes,
-        "edges": edges,
-        "pyspark_code": pyspark_code,
-        "status": "executed"
-    }
-    # workflows_collection.insert_one(workflow_entry)
 
     return jsonify({
         "message": "✅ Workflow executed successfully!",
         "pyspark_code": pyspark_code
     }), 201
+
 
 def provide_code(nodes,edges):
     if not nodes or not edges:
@@ -214,16 +214,23 @@ def chatbot():
     # Add workflow context if present
     workflow_context = ""
     if nodes and edges:
-        code_snippet = provide_code(nodes, edges)
+        code_response = provide_code(nodes, edges)
+        if isinstance(code_response, dict):
+            workflow_context = code_response.get("pyspark_code", "")
+        elif hasattr(code_response, 'json'):
+            workflow_context = code_response.json.get("pyspark_code", "")
+        else:
+            workflow_context = ""
+
         if level == "beginner":
             workflow_context = (
                 "\n\nThis is the student's workflow. Explain it step-by-step:\n"
-                f"{code_snippet}"
+                f"{workflow_context}"
             )
         else:
             workflow_context = (
                 "\n\nGenerate clean PySpark code for the following workflow:\n"
-                f"{code_snippet}"
+                f"{workflow_context}"
             )
 
     # System prompt based on level
@@ -241,24 +248,13 @@ def chatbot():
             "Assume the user is advanced. Be concise and output only working PySpark code unless asked for more.\n"
         )
 
-    # Final payload
-    payload = {
-        "model": MODEL_ID,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message + workflow_context}
-        ],
-        "max_tokens": 800,
-        "temperature": 0.7,
-        "top_p": 0.95
-    }
+    # Combine the system prompt and user question
+    full_prompt = system_prompt + "\n\n" + message + workflow_context
 
     try:
-        response = requests.post(BASE_URL, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        reply = data["choices"][0]["message"]["content"]
-        return jsonify({"reply": reply})
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content(full_prompt)
+        return jsonify({"reply": response.text})
     except Exception as e:
         return jsonify({"reply": f"❌ Error: {str(e)}"}), 500
 
@@ -388,25 +384,38 @@ def run_pyspark():
 
             stdin_backup = sys.stdin
             sys.stdin = StringIO(manual_input)
+            try:
+                spark = SparkSession.builder.master("local[*]").appName("BigDataApp").getOrCreate()
+                print("🔍 Spark initialized:", spark)
 
-            # Create SparkSession
-            spark = SparkSession.builder.master("local[*]").appName("BigDataApp").getOrCreate()
-            local_env = {"spark": spark, "uploaded_files": file_paths}
+                if not spark or not spark.sparkContext:
+                    raise RuntimeError("❌ Spark or SparkContext is None. Check your Spark setup.")
 
-            with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
-                exec(code, local_env)
+                sc = spark.sparkContext
+                print("✅ Spark Context:", sc)
 
-            sys.stdin = stdin_backup
-            sc = spark.sparkContext
-            runtime_config = {
-                "cluster": sc.master,
-                "ip": sc.getConf().get("spark.driver.host", "n/a"),
-                "port": sc.getConf().get("spark.driver.port", "n/a"),
-                "user": os.getlogin(),  # or use getpass.getuser()
-                "applicationId": sc.applicationId,
-                "uiUrl": sc.uiWebUrl or "n/a"
-            }
-            spark.stop()
+                local_env = {"spark": spark, "uploaded_files": file_paths}
+
+                with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
+                    exec(code, local_env)
+
+                runtime_config = {
+                    "cluster": sc.master,
+                    "ip": sc.getConf().get("spark.driver.host", "n/a"),
+                    "port": sc.getConf().get("spark.driver.port", "n/a"),
+                    "user": os.getlogin(),
+                    "applicationId": sc.applicationId,
+                    "uiUrl": sc.uiWebUrl or "n/a"
+                }
+
+                spark.stop()
+            except Exception as err:
+                print("⚠️ Python Execution Error:", err)
+                error_buffer.write(str(err))
+
+
+            finally:
+                sys.stdin = stdin_backup
 
         elif language == "java":
             try:
@@ -458,6 +467,7 @@ def run_pyspark():
             class_file = os.path.join(upload_folder, "TestApp.class")
             if os.path.exists(class_file):
                 os.remove(class_file)
+            print( " JAVA CODE: ", os.path.exists(class_file) )
             os.remove(java_file)
 
         else:
@@ -511,6 +521,49 @@ def execute_spark():
         return jsonify({"output": result.stdout, "error": result.stderr})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route("/api/instructor/questions", methods=["GET"])
+def get_questions():
+    try:
+        questions = list(questions_collection.find())
+        
+        # Convert ObjectId to string for frontend compatibility
+        for q in questions:
+            q["_id"] = str(q["_id"])
+        
+        return jsonify(questions), 200
+    except Exception as e:
+        print("❌ Error fetching questions:", str(e))
+        return jsonify({"message": "❌ Error fetching questions."}), 500
+    
+
+@app.route("/api/instructor/questions", methods=["POST"])
+def add_question():
+    try:
+        data = request.json
+        question_text = data.get("questionText")
+
+        if not question_text:
+            return jsonify({"message": "❌ Question text is required."}), 400
+
+        # Create a new question document
+        question_doc = {
+            "questionText": question_text,
+            "createdAt": datetime.datetime.utcnow()
+        }
+
+        # Insert into MongoDB
+        result = questions_collection.insert_one(question_doc)
+
+        return jsonify({
+            "message": "✅ Question added successfully.",
+            "questionId": str(result.inserted_id)
+        }), 201
+
+    except Exception as e:
+        print("❌ Error adding question:", str(e))
+        return jsonify({"message": "❌ Failed to add question."}), 500
+
 
 # ✅ Retrieve Execution Logs
 @app.route("/api/execution_logs", methods=["GET"])

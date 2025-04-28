@@ -1,0 +1,17 @@
+.dark-modal {
+    background-color: #1e1e1e;
+    color: #f5f5f5;
+    border: 1px solid #444;
+  }
+  
+  .dark-modal pre {
+    background-color: #2d2d2d;
+    color: #ffffff;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border-radius: 4px;
+    border: 1px solid #444;
+    font-size: 0.9rem;
+  }
+  

@@ -5,7 +5,7 @@
   background-position: center;
   background-repeat: no-repeat;
   height: 100vh;
-  padding-top: 15vh;
+  padding-top: 70px; /* Add padding to avoid content hidden behind NavBar */
   padding-left: 5vw;
   display: flex;
   flex-direction: column;

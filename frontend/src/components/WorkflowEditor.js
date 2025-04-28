@@ -15,6 +15,9 @@ import ChatBot from "./ChatBot";
 import "./WorkflowEditor.css"; // Optional custom styles
 import EditableNode from "./EditableNode";
 import { useMemo } from "react";
+import { getQuestions } from "../api/authApi";
+import Navmenu from "./Navmenu";
+import { useNavigate } from "react-router-dom";
 
 Modal.setAppElement("#root");
 
@@ -28,6 +31,8 @@ const initialEdges = [];
 
 
 const WorkflowEditor = ({ userRole }) => {
+    const [questions, setQuestions] = useState([]);
+    const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -38,11 +43,30 @@ const WorkflowEditor = ({ userRole }) => {
   const [selectedNodeName, setSelectedNodeName] = useState("");
   const [codeModalIsOpen, setCodeModalIsOpen] = useState(false);
   const [generatedCode, setGeneratedCode] = useState(""); // Store generated PySpark code
-
+  const navigate = useNavigate()
   // ✅ Fetch workflows from MongoDB on page load
   useEffect(() => {
     fetchWorkflows();
+    fetchQuestions();
   }, []);
+
+  // Fetch available questions from instructor
+    const fetchQuestions = async () => {
+      try {
+        const response = await getQuestions();
+        console.log( response );
+        setQuestions(response.data);
+      } catch (error) {
+        console.error("Error fetching questions:", error);
+      }
+    };
+
+    const handleQuestionSelect = (e) => {
+      const questionId = e.target.value;
+      const question = questions.find((q) => q._id === questionId);
+      setSelectedQuestion(question);
+    };
+  
 
   const fetchWorkflows = async () => {
     try {
@@ -252,7 +276,9 @@ const WorkflowEditor = ({ userRole }) => {
     return Object.values(nodeMap);
   };
   
-  
+  const goToCodeEditor = () => {
+    navigate("/code-editor");
+  }
 
   
   const handleRun = async () => {
@@ -262,9 +288,7 @@ const WorkflowEditor = ({ userRole }) => {
       console.log( enrichedNodes )
 
       const workflowData = { enrichedNodes, edges };
-      console.log( workflowData );
-      
-      console.log( workflowData );
+      console.log( workflowData );      
       const response = await runWorkflow(workflowData);
       if (response.pyspark_code) {
         alert("✅ Workflow executed! PySpark code generated.");
@@ -287,7 +311,55 @@ const WorkflowEditor = ({ userRole }) => {
     };
 
     return (
+      <>
+      <Navmenu setUserRole={userRole} />
+      { userRole === `student` ?
+        (
       <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column" }}>
+        
+        <>
+          <label>Select a Question:</label>
+          <select
+            value={selectedQuestion ? selectedQuestion._id : ""}
+            onChange={handleQuestionSelect}
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginBottom: "10px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis", // Truncate the dropdown text
+            }}
+          >
+            <option value="">-- Select a Question --</option>
+            {questions.map((q) => (
+              <option key={q._id} value={q._id}>
+                {q.questionText}
+              </option>
+            ))}
+          </select>
+
+          {/* Display the selected question in a div below the dropdown */}
+          {selectedQuestion && (
+            <div
+            style={{
+              marginTop: "10px",
+              padding: "10px",
+              backgroundColor: "#f1f1f1",
+              borderRadius: "5px",
+              border: "1px solid #ddd",
+              wordWrap: "break-word", // Allow text to break into multiple lines
+              whiteSpace: "normal", // Allow text to wrap
+            }}
+
+            >
+              <strong>Selected Question:</strong>
+              <p>{selectedQuestion.questionText}</p>
+            </div>
+          )}
+
+          
+          </>
         <div className="p-2 bg-light d-flex gap-2 align-items-center flex-wrap">
           <button className="btn btn-primary btn-sm" onClick={addNode}>➕ Add Node</button>
           <button className="btn btn-warning btn-sm" onClick={openEditModal} disabled={!selectedNode || selectedNode.id === "start" || selectedNode.id === "end"}>✏️ Edit Node</button>
@@ -357,22 +429,59 @@ const WorkflowEditor = ({ userRole }) => {
         </Modal>
   
         {/* Code Modal */}
-        <Modal isOpen={codeModalIsOpen} onRequestClose={() => setCodeModalIsOpen(false)} className="modal-dialog" overlayClassName="modal-backdrop show d-block">
-          <div className="modal-content p-3">
-            <h5>Generated PySpark Code</h5>
-            <pre className="bg-light p-2" style={{ maxHeight: "300px", overflowY: "auto", whiteSpace: "pre-wrap" }}>
-              {generatedCode}
-            </pre>
-            <div className="d-flex gap-2 mt-2">
-              <button className="btn btn-success btn-sm" onClick={copyToClipboard}>📋 Copy</button>
-              <button className="btn btn-outline-dark btn-sm" onClick={() => setCodeModalIsOpen(false)}>Close</button>
-            </div>
-          </div>
-        </Modal>
+        <Modal
+  isOpen={codeModalIsOpen}
+  onRequestClose={() => setCodeModalIsOpen(false)}
+  className="modal-dialog"
+  overlayClassName="modal-backdrop show d-block"
+>
+  <div
+    className="modal-content p-3"
+    style={{ backgroundColor: "black", color: "#f5f5f5", border: "1px solid #444" }}
+  >
+    <h5 style={{ color: "#ffffff" }}>🚀 Generated PySpark Code</h5>
+    <pre
+      className="p-2"
+      style={{
+        backgroundColor: "#2d2d2d",
+        color: "#ffffff",
+        maxHeight: "300px",
+        overflowY: "auto",
+        whiteSpace: "pre-wrap",
+        borderRadius: "4px",
+        border: "1px solid #444",
+        fontSize: "0.9rem"
+      }}
+    >
+      {generatedCode}
+    </pre>
+    <div className="d-flex gap-2 mt-2">
+      <button className="btn btn-success btn-sm" onClick={copyToClipboard}>
+        📋 Copy
+      </button>
+      <button className="btn btn-outline-light btn-sm" onClick={() => setCodeModalIsOpen(false)}>
+        Close
+      </button>
+      <button className="btn btn-success btn-sm" onClick={goToCodeEditor}>
+        Go to Code Editor
+      </button>
+    </div>
+  </div>
+</Modal>
+
   
         <ChatBot nodes={nodes} edges={edges}/>
       </div>
-    );
+          )
+      :
+      (
+      <>
+        Enter
+      </>
+      )
+    }
+    </>
+    )
   
 };
 
