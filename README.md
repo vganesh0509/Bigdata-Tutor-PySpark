@@ -97,17 +97,4 @@ python app.py                          # Start Flask server
 - 🧪 PySpark Code Generation from Text
 - 📄 MongoDB storage for users and workflows
 
----
 
-## 📬 Contact
-
-For questions or contributions:
-
-- 👨‍💻 [Your Name](https://github.com/your-username)
-- ✉️ your.email@example.com
-
----
-
-## 📝 License
-
-This project is intended for educational purposes. MIT or custom academic license.
