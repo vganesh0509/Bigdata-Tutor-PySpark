@@ -1,13 +1,6 @@
 # from pymongo.mongo_client import MongoClient
 # from pymongo.server_api import ServerApi
 
-# # Use your MongoDB Atlas connection string
-# # mongodb+srv://godakodati:<db_password>@cluster0.0toxr.mongodb.net/
-# #MONGO_URI = "mongodb+srv://godakodati:46hvkyxhGB2itfU4@cluster0.0toxr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-# #MONGO_URI = "mongodb+srv://godakodati:46hvkyxhGB2itfU4@cluster0.0toxr.mongodb.net/?retryWrites=true&w=majority&tls=true&appName=Cluster0"
-# #MONGO_URI = "mongodb+srv://godakodati:46hvkyxhGB2itfU4@cluster0.0toxr.mongodb.net/?tls=true&retryWrites=true&w=majority"
-# MONGO_URI = "mongodb+srv://ganeshvasa72:Ganesh12@cluster0.mqyfpz8.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-# MONGO_URI = "mongodb+srv://godakodati:46hvkyxhGB2itfU4@cluster0.0toxr.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
 
 # # Create a global MongoDB client (Singleton Pattern)
 # client = None
@@ -28,7 +21,7 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
 # Updated URI - disables certificate checking via URI
-MONGO_URI = "mongodb+srv://ganeshvasa72:Ganesh12@cluster0.mqyfpz8.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
+MONGO_URI="mongodb+srv://username:password@cluster0.mongodb.net/dbname?retryWrites=true&w=majority"
 
 # Create a global MongoDB client (Singleton Pattern)
 client = None
