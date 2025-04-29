@@ -199,64 +199,68 @@ def provide_code(nodes,edges):
         "pyspark_code": pyspark_code
     }), 201
 
-# Chatbot route
+
+def build_chatbot_prompt(enriched_nodes, edges, level):
+    prompt = ""
+
+    if level == "beginner":
+        prompt += "Explain the following data processing workflow step-by-step:\n\n"
+        for node in enriched_nodes:
+            label = node["data"].get("label", "Unnamed Node")
+            statements = node["data"].get("statements", [])
+            prompt += f"Step: {label}\n"
+            for statement in statements:
+                prompt += f" - {statement}\n"
+            prompt += "\n"
+        
+        prompt += "Also explain the flow based on these dependencies:\n"
+        for edge in edges:
+            prompt += f"{edge['source']} -> {edge['target']}\n"
+
+    else:  # advanced
+        prompt += "Generate PySpark code for the following workflow:\n\n"
+        for node in enriched_nodes:
+            label = node["data"].get("label", "Unnamed Node")
+            statements = node["data"].get("statements", [])
+            prompt += f"# Step: {label}\n"
+            for statement in statements:
+                prompt += f"# {statement}\n"
+        prompt += "\nDependencies:\n"
+        for edge in edges:
+            prompt += f"{edge['source']} depends on {edge['target']}\n"
+
+    return prompt
+
+
 @app.route("/api/chatbot", methods=["POST"])
 def chatbot():
     data = request.json
     message = data.get("message")
-    level = data.get("level", "beginner")  # default to beginner
-    nodes = data.get("nodes", [])
-    edges = data.get("edges", [])
+    level = data.get("level", "beginner")
+    workflow_data = data.get("data", {})
+    enriched_nodes = workflow_data.get("enrichedNodes", [])
+    edges = workflow_data.get("edges", [])
 
     if not message:
         return jsonify({"reply": "❌ No message provided."}), 400
 
-    # Add workflow context if present
-    workflow_context = ""
-    if nodes and edges:
-        code_response = provide_code(nodes, edges)
-        if isinstance(code_response, dict):
-            workflow_context = code_response.get("pyspark_code", "")
-        elif hasattr(code_response, 'json'):
-            workflow_context = code_response.json.get("pyspark_code", "")
-        else:
-            workflow_context = ""
+    # ✅ Build custom prompt
+    workflow_prompt = build_chatbot_prompt(enriched_nodes, edges, level)
 
-        if level == "beginner":
-            workflow_context = (
-                "\n\nThis is the student's workflow. Explain it step-by-step:\n"
-                f"{workflow_context}"
-            )
-        else:
-            workflow_context = (
-                "\n\nGenerate clean PySpark code for the following workflow:\n"
-                f"{workflow_context}"
-            )
-
-    # System prompt based on level
-    system_prompt = (
-        "You are an AI assistant for BigDataTutor. Your job is to help students understand data engineering, "
-        "Spark workflows, and PySpark code.\n"
+    # ✅ Combine user question + workflow
+    final_prompt = (
+        f"You are helping a student with a Spark workflow.\n\n"
+        f"Student question: {message}\n\n"
+        f"Workflow details:\n{workflow_prompt}\n"
     )
-    if level == "beginner":
-        system_prompt += (
-            "Explain everything simply, break it down step-by-step, and use analogies if needed. "
-            "Assume the user is just starting out.\n"
-        )
-    else:
-        system_prompt += (
-            "Assume the user is advanced. Be concise and output only working PySpark code unless asked for more.\n"
-        )
-
-    # Combine the system prompt and user question
-    full_prompt = system_prompt + "\n\n" + message + workflow_context
 
     try:
-        model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(full_prompt)
+        model = genai.GenerativeModel("gemini-1.5-pro-latest")
+        response = model.generate_content(final_prompt)
         return jsonify({"reply": response.text})
     except Exception as e:
         return jsonify({"reply": f"❌ Error: {str(e)}"}), 500
+
 
 
 

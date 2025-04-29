@@ -9,6 +9,73 @@ const ChatBot = ({ nodes, edges }) => {
   const [loading, setLoading] = useState(false);
   const [studentLevel, setStudentLevel] = useState(null); // Store the user level
 
+  const getOrderedAccumulatedStatements = (nodes, edges) => {
+    const nodeMap = Object.fromEntries(nodes.map((node) => [node.id, { ...node }]));
+  
+    // Map target → [source1, source2, ...]
+    const incomingMap = {};
+    const outgoingMap = {};
+  
+    edges.forEach(({ source, target }) => {
+      if (!incomingMap[target]) incomingMap[target] = [];
+      if (!outgoingMap[source]) outgoingMap[source] = [];
+      incomingMap[target].push(source);
+      outgoingMap[source].push(target);
+    });
+  
+    const visited = new Set();
+    const result = [];
+  
+    // Get topologically sorted nodes by depth (basic Kahn’s algorithm with LTR sort)
+    const getExecutionOrder = () => {
+      const inDegree = {};
+      nodes.forEach((node) => (inDegree[node.id] = 0));
+      edges.forEach(({ target }) => {
+        inDegree[target]++;
+      });
+  
+      const queue = nodes
+        .filter((node) => inDegree[node.id] === 0)
+        .sort((a, b) => a.position.x - b.position.x); // Start left to right
+  
+      const ordered = [];
+  
+      while (queue.length > 0) {
+        const node = queue.shift();
+        ordered.push(node);
+  
+        (outgoingMap[node.id] || []).forEach((childId) => {
+          inDegree[childId]--;
+          if (inDegree[childId] === 0) {
+            queue.push(nodeMap[childId]);
+            queue.sort((a, b) => a.position.x - b.position.x);
+          }
+        });
+      }
+  
+      return ordered;
+    };
+  
+    const orderedNodes = getExecutionOrder();
+  
+    // Build cumulative statements
+    for (const node of orderedNodes) {
+      const currentId = node.id;
+      const currentStatements = node.data.statements || [];
+  
+      // Merge all parent cumulative statements
+      const parentIds = incomingMap[currentId] || [];
+      const parentCumulative = parentIds.flatMap(
+        (parentId) => nodeMap[parentId].data.cumulativeStatements || []
+      );
+  
+      const cumulativeStatements = [...parentCumulative, ...currentStatements];
+      nodeMap[currentId].data.cumulativeStatements = cumulativeStatements;
+    }
+  
+    return Object.values(nodeMap);
+  };
+
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -45,6 +112,12 @@ const ChatBot = ({ nodes, edges }) => {
       }
     }
 
+    const enrichedNodes = getOrderedAccumulatedStatements(nodes, edges);
+
+    console.log( enrichedNodes )
+
+    const workflowData = {enrichedNodes,edges};
+
     // Proceed to fetch chatbot response
     try {
       const response = await fetch("http://localhost:5000/api/chatbot", {
@@ -55,8 +128,7 @@ const ChatBot = ({ nodes, edges }) => {
         body: JSON.stringify({
           message: input,
           level: studentLevel, // send this to backend if you want to enhance later
-          nodes: nodes,
-          edges: edges
+          data: workflowData
         }),
       });
 
@@ -76,11 +148,18 @@ const ChatBot = ({ nodes, edges }) => {
   return (
     <div className="chatbot-container">
       <div className="chat-window">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.sender}`}>
-            {msg.text}
-          </div>
-        ))}
+      {messages.map((msg, idx) => (
+        <div key={idx} className={`message ${msg.sender}`}>
+          {msg.text.includes("\n") ? (
+            <pre>
+              <code>{msg.text}</code>
+            </pre>
+          ) : (
+            msg.text
+          )}
+        </div>
+      ))}
+
         {loading && <div className="message bot">Thinking...</div>}
       </div>
       <div className="chat-input">

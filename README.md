@@ -70,7 +70,7 @@ npm start
 cd ../Backend
 python -m venv venv                    # Create virtual environment
 venv\Scripts\activate                  # On Windows
-# source venv/bin/activate            # On Mac/Linux
+# source venv\Scripts\activate            # On Mac/Linux
 
 pip install -r requirements.txt        # Install dependencies
 python app.py                          # Start Flask server

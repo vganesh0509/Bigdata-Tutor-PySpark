@@ -17,7 +17,7 @@ import EditableNode from "./EditableNode";
 import { useMemo } from "react";
 import { getQuestions } from "../api/authApi";
 import Navmenu from "./Navmenu";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 Modal.setAppElement("#root");
 
@@ -31,13 +31,26 @@ const initialEdges = [];
 
 
 const WorkflowEditor = ({ userRole }) => {
+  const location = useLocation();
     const [questions, setQuestions] = useState([]);
     const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [nodes, setNodes] = useState(initialNodes);
-  const [edges, setEdges] = useState(initialEdges);
+
+    console.log( "QUESTION:", selectedQuestion );
+    
+  const [nodes, setNodes] = 
+  useState(
+    location?.state?.nodes || initialNodes
+  );
+  // useState(initialNodes);
+  const [edges, setEdges] = useState(
+    location?.state?.edges || initialEdges
+  );
+  // useState(initialEdges);
   const [selectedNode, setSelectedNode] = useState(null);
   const [workflows, setWorkflows] = useState([]); // Stores fetched workflows
-  const [selectedWorkflow, setSelectedWorkflow] = useState(""); // Selected workflow name
+  const [selectedWorkflow, setSelectedWorkflow] = useState(
+    location?.state?.selectedDropdownValue || null
+  );
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [statements, setStatements] = useState([]);
   const [selectedNodeName, setSelectedNodeName] = useState("");
@@ -277,7 +290,7 @@ const WorkflowEditor = ({ userRole }) => {
   };
   
   const goToCodeEditor = () => {
-    navigate("/code-editor");
+    navigate("/code-editor", { state: { code: generatedCode } });
   }
 
   
@@ -293,7 +306,9 @@ const WorkflowEditor = ({ userRole }) => {
       if (response.pyspark_code) {
         alert("✅ Workflow executed! PySpark code generated.");
         setGeneratedCode(response.pyspark_code);  // Store the generated PySpark code
-        setCodeModalIsOpen(true);  // Open modal to display code
+        // setCodeModalIsOpen(true);  // Open modal to display code
+        console.log( selectedQuestion )
+        navigate("/code-editor", { state: { code: response.pyspark_code, selectedDropdownValue: selectedWorkflow, nodes: nodes, edges: edges  } });
       } else {
         alert("❌ Failed to generate PySpark code.");
       }

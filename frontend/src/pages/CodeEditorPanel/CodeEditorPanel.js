@@ -2,15 +2,24 @@
 import React, { useState } from "react";
 import Editor from "@monaco-editor/react";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 
 function CodeEditorPanel() {
-  const [code, setCode] = useState("# Write your PySpark code here\n");
+  // const [code, setCode] = useState("# Write your PySpark code here\n");
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
   const [inputText, setInputText] = useState("");
   const [inputFiles, setInputFiles] = useState([]);
   const [language, setLanguage] = useState("python"); // Default language
-
+  const location = useLocation();
+  const navigate = useNavigate();
+  const generatedCode = location.state?.code || ""; // fallback to empty string if not provided
+  const [code, setCode] = useState(generatedCode);
+  const selectedDropdownValue = location.state?.selectedDropdownValue || ""; // ✅ Get selected dropdown value
+  const nodes = location.state?.nodes || {}; // ✅ Get selected dropdown value
+  const edges = location.state?.edges || {}; // ✅ Get selected dropdown value
+  console.log( "Question:", selectedDropdownValue );
+  
 
   const handleRunCode = async () => {
     const formData = new FormData();
@@ -39,11 +48,31 @@ function CodeEditorPanel() {
       console.error("Execution Error:", error);
     }
   };
+
+  // ✅ Function to navigate back to Workflow Editor
+  const handleReturnToWorkflowEditor = () => {
+    navigate("/workflow-editor", {
+      state: {
+        code,                      // ✅ Send back current code
+        selectedDropdownValue,     // ✅ Send back selected dropdown value
+        nodes,              // ✅ Send back current React Flow data
+        edges
+      },
+    });
+  };
   
   
 
   return (
+    
     <div>
+      {/* ✅ Return to Workflow Editor Button */}
+      <button
+        onClick={handleReturnToWorkflowEditor} // ✅ Navigate to workflow editor route
+        style={{ marginBottom: "10px", backgroundColor: "#f0f0f0", padding: "8px", borderRadius: "5px" , float: "right"}}
+      >
+        🔙 Return to Workflow Editor
+      </button>
       <div style={{ marginBottom: "10px" }}>
         <label htmlFor="language">Choose Language: </label>
         <select
