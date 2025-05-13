@@ -18,6 +18,7 @@ import { useMemo } from "react";
 import { getQuestions } from "../api/authApi";
 import Navmenu from "./Navmenu";
 import { useLocation, useNavigate } from "react-router-dom";
+import html2canvas from "html2canvas";  // For image export
 
 Modal.setAppElement("#root");
 
@@ -318,6 +319,40 @@ const WorkflowEditor = ({ userRole }) => {
     }
   }
 
+
+
+  // Export workflow as JSON
+const exportWorkflowAsJSON = () => {
+  const workflow = { nodes, edges };
+  const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "workflow.json";
+  link.click();
+};
+
+// Import workflow from a selected JSON file
+const importWorkflowFromJSON = (event) => {
+  const fileReader = new FileReader();
+  fileReader.onload = (e) => {
+    const content = JSON.parse(e.target.result);
+    setNodes(content.nodes || []);
+    setEdges(content.edges || []);
+  };
+  fileReader.readAsText(event.target.files[0]);
+};
+
+
+// Export workflow canvas as image
+const exportWorkflowAsImage = async () => {
+  const canvas = await html2canvas(document.querySelector(".react-flow"));
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = "workflow.png";
+  link.click();
+};
+
   
     // ✅ Function to copy PySpark code to clipboard
     const copyToClipboard = () => {
@@ -375,7 +410,9 @@ const WorkflowEditor = ({ userRole }) => {
 
           
           </>
-        <div className="p-2 bg-light d-flex gap-2 align-items-center flex-wrap">
+        <div className="p-2 bg-light d-flex gap-2 align-items-center flex-wrap"
+        style={{ overflowX: "auto", flexWrap: "wrap" }}
+        >
           <button className="btn btn-primary btn-sm" onClick={addNode}>➕ Add Node</button>
           <button className="btn btn-warning btn-sm" onClick={openEditModal} disabled={!selectedNode || selectedNode.id === "start" || selectedNode.id === "end"}>✏️ Edit Node</button>
           <button className="btn btn-danger btn-sm" onClick={deleteNode} disabled={!selectedNode || selectedNode.id === "start" || selectedNode.id === "end"}>🗑️ Delete Node</button>
@@ -390,6 +427,15 @@ const WorkflowEditor = ({ userRole }) => {
               </option>
             ))}
           </select>
+          <button className="btn btn-secondary btn-sm" onClick={exportWorkflowAsJSON}>⬇️ Export JSON</button>
+
+          <label className="btn btn-secondary btn-sm" style={{ padding: "4px 12px" }}>
+            📤 Import JSON
+            <input type="file" accept=".json" onChange={importWorkflowFromJSON} hidden />
+          </label>
+
+          <button className="btn btn-secondary btn-sm" onClick={exportWorkflowAsImage}>🖼️ Export Image</button>
+
         </div>
   
         <div style={{ flex: 1 }}>

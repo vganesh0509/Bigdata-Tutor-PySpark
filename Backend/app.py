@@ -357,6 +357,10 @@ def run_pyspark():
         # Set Java path (Update if needed)
         os.environ["JAVA_HOME"] = r"C:\Program Files\Java\jdk1.8.0_202"
         os.environ["PATH"] = os.environ["JAVA_HOME"] + r"\bin;" + os.environ["PATH"]
+        
+        # ✅ Set PySpark to use venv Python (VERY IMPORTANT)
+        os.environ["PYSPARK_PYTHON"] = r"E:\BigdataTutor\Backend\venv\Scripts\python.exe"
+
 
         # Get inputs
         code = request.form.get("code")
@@ -398,7 +402,12 @@ def run_pyspark():
                 sc = spark.sparkContext
                 print("✅ Spark Context:", sc)
 
-                local_env = {"spark": spark, "uploaded_files": file_paths}
+                #local_env = {"spark": spark, "uploaded_files": file_paths}
+                local_env={
+                    "spark": spark,
+                    "sc": spark.sparkContext,  # ✅ Add SparkContext to user code environment
+                    "uploaded_files": file_paths
+                }
 
                 with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(error_buffer):
                     exec(code, local_env)

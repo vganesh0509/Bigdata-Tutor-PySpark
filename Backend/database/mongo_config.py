@@ -23,7 +23,7 @@ from pymongo.server_api import ServerApi
 # Updated URI - disables certificate checking via URI
 #MONGO_URI="mongodb+srv://ganeshvasa72:Ganesh12@cluster0.mqyfpz8.mongodb.net/?retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
 
-MONGO_URI = "mongodb+srv://godak:Abcd123@cluster0.cqs7fql.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
+MONGO_URI = "mongodb+srv://ganesh:Ganesh12@cluster0.0lpjal5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 
 # Create a global MongoDB client (Singleton Pattern)
 client = None
