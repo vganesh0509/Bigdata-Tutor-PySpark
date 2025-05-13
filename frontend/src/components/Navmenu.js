@@ -19,7 +19,7 @@ function Navmenu({ setUserRole, handleLogout }) {
     <>
       <Navbar bg="dark" data-bs-theme="dark">
         <Container>
-          <Navbar.Brand as={Link} to="/">Big Data</Navbar.Brand>
+          <Navbar.Brand as={Link} to="/home">Big Data</Navbar.Brand>
           <Nav className="me-auto">
             <Nav.Link as={Link} to="/workflow-editor">Workflow</Nav.Link>
           </Nav>

@@ -37,7 +37,7 @@ const Login = ({ setUserRole }) => {
             <input
               type="text"
               className="form-control mb-3"
-              placeholder="Username"
+              placeholder="Email"
               onChange={(e) => setUsername(e.target.value)}
             />
             <input

@@ -10,6 +10,12 @@ const Register = () => {
   const navigate = useNavigate();
 
   const handleRegister = async () => {
+     // Email must be valid and end with @charlotte.edu
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@(charlotte|uncc)\.edu$/;
+    if (!emailRegex.test(username)) {
+      alert("❌ Invalid Email! Please use a valid @charlotte.edu email address.");
+      return;
+    }
     try {
       await registerUser({ username, password, role });
       alert("✅ Registration Successful! Please Login.");
@@ -26,7 +32,7 @@ const Register = () => {
         <input
           type="text"
           className="form-control mb-3"
-          placeholder="Username"
+          placeholder="Email"
           onChange={(e) => setUsername(e.target.value)}
         />
         <input
